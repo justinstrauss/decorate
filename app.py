@@ -3,9 +3,20 @@
 # MongoDB Project
 
 import db
+from functools import wraps
 from flask import Flask, render_template, request, redirect, session, url_for, flash
 
 app = Flask(__name__)
+
+def login_required(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        if session["name"]==None:
+            flash("You must login to access this protected page!")
+            session['nextpage'] = request.url
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return inner
 
 @app.route('/', methods=["POST","GET"])
 @app.route('/index', methods=["POST","GET"])
@@ -22,10 +33,8 @@ def login():
         #if authenticate(username,password):
         if db.authenticate(username,password):
             session['name'] = username
-            global prevpage
-            page = prevpage
-            prevpage = "index"
-            return redirect(url_for(page))
+            page = session.pop('nextpage','/')
+            return redirect(page)
         else:
             if db.userexists(username):
                 flash("You've inputted the wrong password for the given user.")
@@ -64,22 +73,18 @@ def register():
     else:
         if session['name']!=None:
             flash("You're already logged in, so you can't register for a second account!")
-            return redirect(url_for(prevpage))
+            page = session.pop('nextpage','/')
+            return redirect(page)
         return render_template("register.html")
 
 @app.route("/user", methods=["POST","GET"])
+@login_required
 def myself():
     if request.method == "GET":
-        if session["name"]==None:
-            flash("You must login to access Profile, which is a protected page!")
-            global prevpage
-            prevpage = "myself"
-            return redirect(url_for('login'))
-        else:
-            profile=db.getprofile(session['name'])
-            #print profile
-            posts = db.getposts(session['name'])
-            return render_template("profile.html",profile=profile, posts=posts)
+        profile=db.getprofile(session['name'])
+        #print profile
+        posts = db.getposts(session['name'])
+        return render_template("profile.html",profile=profile, posts=posts)
     else:
         newpw = request.form["newpassword"]
         newpw2 = request.form["newpassword2"]
@@ -92,30 +97,20 @@ def myself():
             return redirect(url_for('logout'))
 
 @app.route("/user/<username>")
+@login_required
 def user(username):
-    if session["name"]==None:
-        flash("You must login to access Profile, which is a protected page!")
-        global prevpage
-        prevpage = "myself"
-        return redirect(url_for('login'))
-    else:
-        profile=db.getprofile(username)
-        #print profile
-        posts = db.getposts(username)
-        return render_template("profileother.html",profile=profile,posts=posts)
+    profile=db.getprofile(username)
+    #print profile
+    posts = db.getposts(username)
+    return render_template("profileother.html",profile=profile,posts=posts)
 
 @app.route("/blog", methods=["POST","GET"])
+@login_required
 def blog():
     if request.method == "GET":
-        if session["name"]==None:
-            flash("You must login to access Blog, which is a protected page!")
-            global prevpage
-            prevpage = "blog"
-            return redirect(url_for('login'))
-        else:
-            blog=db.getblog(session['name'])
-            print blog
-            return render_template("blog.html",blog=blog)
+        blog=db.getblog(session['name'])
+        print blog
+        return render_template("blog.html",blog=blog)
     else:
         title = request.form["title"]
         content = request.form["content"]
@@ -128,17 +123,12 @@ def blog():
             return redirect(url_for('blog'))
 
 @app.route("/blog/<title>", methods=["POST","GET"])
+@login_required
 def blogcontent(title):
     if request.method == "GET":
-        if session["name"]==None:
-            flash("You must login to access Blog, which is a protected page!")
-            global prevpage
-            prevpage = "blog"
-            return redirect(url_for('login'))
-        else:
-            blogcontent=db.getblogcontent(title)
-            print blogcontent
-            return render_template("blogcontent.html",title=title,blogcontent=blogcontent)
+        blogcontent=db.getblogcontent(title)
+        print blogcontent
+        return render_template("blogcontent.html",title=title,blogcontent=blogcontent)
     else:
         comment = request.form["comment"]
         if db.invalidcomment(comment):
@@ -150,42 +140,26 @@ def blogcontent(title):
             return redirect(url_for('blog'))
 
 @app.route("/blog/upvote/<title>", methods=["POST","GET"])
+@login_required
 def upvote(title):
-    if session["name"]==None:
-        flash("You must login to access Blog, which is a protected page!")
-        global prevpage
-        prevpage = "blog"
-        return redirect(url_for('login'))
-    else:
-        db.votepost(title,1)
-        return redirect(url_for('blog'))
+    db.votepost(title,1)
+    return redirect(url_for('blog'))
 
 @app.route("/blog/downvote/<title>", methods=["POST","GET"])
+@login_required
 def downvote(title):
-    if session["name"]==None:
-        flash("You must login to access Blog, which is a protected page!")
-        global prevpage
-        prevpage = "blog"
-        return redirect(url_for('login'))
-    else:
-        db.votepost(title,-1)
-        return redirect(url_for('blog'))
+    db.votepost(title,-1)
+    return redirect(url_for('blog'))
 
 @app.route("/contacts")
+@login_required
 def contacts():
-    if session["name"]==None:
-        flash("You must login to access Contacts, which is a protected page!")
-        global prevpage
-        prevpage = "contacts"
-        return redirect(url_for('login'))
-    else:
-        contacts=db.getcontacts(session['name'])
-        print contacts
-        return render_template("contacts.html",contacts=contacts)
+    contacts=db.getcontacts(session['name'])
+    print contacts
+    return render_template("contacts.html",contacts=contacts)
 
 if __name__ == '__main__':
     db.setup()
-    prevpage = "index"
     app.secret_key = "don't store this on github"
     app.debug = True
     app.run(host='0.0.0.0')
