@@ -18,6 +18,27 @@ def login_required(f):
         return f(*args, **kwargs)
     return inner
 
+def authenticate(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        if request.method == "POST":
+            username = request.form["username"]
+            password = request.form["password"]
+            #if authenticate(username,password):
+            if db.authenticate(username,password):
+                session['name'] = username
+                page = session.pop('nextpage','/')
+                return redirect(page)
+            else:
+                if db.userexists(username):
+                    flash("You've inputted the wrong password for the given user.")
+                    return redirect(url_for('login'))
+                else:
+                    flash("The username you inputted hasn't been registered yet.")
+                    return redirect(url_for('register'))
+        return f(*args, **kwargs)    
+    return inner
+
 @app.route('/', methods=["POST","GET"])
 @app.route('/index', methods=["POST","GET"])
 def index():
@@ -26,22 +47,8 @@ def index():
     return render_template("index.html")
 
 @app.route("/login", methods=["POST","GET"])
+@authenticate
 def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        #if authenticate(username,password):
-        if db.authenticate(username,password):
-            session['name'] = username
-            page = session.pop('nextpage','/')
-            return redirect(page)
-        else:
-            if db.userexists(username):
-                flash("You've inputted the wrong password for the given user.")
-                return redirect(url_for('login'))
-            else:
-                flash("The username you inputted hasn't been registered yet.")
-                return redirect(url_for('register'))
     return render_template("login.html")
 
 @app.route('/logout')
